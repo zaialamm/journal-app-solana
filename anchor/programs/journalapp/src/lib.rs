@@ -2,69 +2,122 @@
 
 use anchor_lang::prelude::*;
 
-declare_id!("coUnmi3oBUtwtd9fjeAvSsJssXh5A5xyPbhpewyzRVF");
+declare_id!("2mQigrqhChp8F9HMJ7a5AvGGjGw8kng3UT56TQ7hTtyu");
 
 #[program]
 pub mod journalapp {
     use super::*;
 
-  pub fn close(_ctx: Context<CloseJournalapp>) -> Result<()> {
-    Ok(())
-  }
+    // instruction handler to create a new journal entry
+    pub fn create_journal_entry(
+      ctx: Context<CreateJournalEntry>, 
+      title: String, 
+      message: String,
+    ) -> Result<()> {
+        msg!("Journal Entry created");
+        msg!("Title: {}", title);
+        msg!("Message: {}", message);
 
-  pub fn decrement(ctx: Context<Update>) -> Result<()> {
-    ctx.accounts.journalapp.count = ctx.accounts.journalapp.count.checked_sub(1).unwrap();
-    Ok(())
-  }
+        let journal_entry = &mut ctx.accounts.journal_entry;
+        journal_entry.owner = ctx.accounts.owner.key();
+        journal_entry.title = title;
+        journal_entry.message = message;
+        Ok(())
+    }
 
-  pub fn increment(ctx: Context<Update>) -> Result<()> {
-    ctx.accounts.journalapp.count = ctx.accounts.journalapp.count.checked_add(1).unwrap();
-    Ok(())
-  }
+    // instruction handler to update journal entry
+    pub fn update_journal_entry(
+      ctx: Context<UpdateJournalEntry>, 
+      title: String, 
+      message: String,
+    ) -> Result<()> {
+        msg!("Journal Entry updated");
+        msg!("Title: {}", title);
+        msg!("Message: {}", message);
 
-  pub fn initialize(_ctx: Context<InitializeJournalapp>) -> Result<()> {
-    Ok(())
-  }
+        let journal_entry = &mut ctx.accounts.journal_entry;
+        journal_entry.title = title;
+        journal_entry.message = message;
+        Ok(())
+    }
 
-  pub fn set(ctx: Context<Update>, value: u8) -> Result<()> {
-    ctx.accounts.journalapp.count = value.clone();
-    Ok(())
-  }
+
+    // instruction handler to delete journal entry
+    pub fn delete_journal_entry(
+      ctx: Context<DeleteJournalEntry>,
+      title: String,
+    ) -> Result<()> {
+        msg!("Journal entry titled {} deleted", title);
+        Ok(())
+    }
 }
 
-#[derive(Accounts)]
-pub struct InitializeJournalapp<'info> {
-  #[account(mut)]
-  pub payer: Signer<'info>,
-
-  #[account(
-  init,
-  space = 8 + Journalapp::INIT_SPACE,
-  payer = payer
-  )]
-  pub journalapp: Account<'info, Journalapp>,
-  pub system_program: Program<'info, System>,
-}
-#[derive(Accounts)]
-pub struct CloseJournalapp<'info> {
-  #[account(mut)]
-  pub payer: Signer<'info>,
-
-  #[account(
-  mut,
-  close = payer, // close account and return lamports to payer
-  )]
-  pub journalapp: Account<'info, Journalapp>,
-}
-
-#[derive(Accounts)]
-pub struct Update<'info> {
-  #[account(mut)]
-  pub journalapp: Account<'info, Journalapp>,
-}
-
+//define the journal program state
 #[account]
 #[derive(InitSpace)]
-pub struct Journalapp {
-  count: u8,
+pub struct JournalEntryState {
+    pub owner: Pubkey,
+    #[max_len(50)]
+    pub title: String,
+    #[max_len(1000)]
+    pub message: String,
+}
+
+// define data structure for the create_journal_entry handler
+#[derive(Accounts)]
+#[instruction(title: String, message: String)]
+pub struct CreateJournalEntry<'info> {
+    #[account(
+      init, 
+      seeds = [title.as_bytes(), owner.key().as_ref()],
+      bump,
+      payer = owner, 
+      space = 8 + JournalEntryState::INIT_SPACE
+    )]
+
+    pub journal_entry: Account<'info, JournalEntryState>,
+
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    pub system_program: Program<'info, System>
+}
+
+// define data structure for update_journal_entry handler
+#[derive(Accounts)]
+#[instruction(title: String, message: String)]
+pub struct UpdateJournalEntry<'info> {
+    #[account(
+      mut,
+      seeds = [title.as_bytes(), owner.key().as_ref()],
+      bump,
+      realloc = 8 + JournalEntryState::INIT_SPACE,
+      realloc::payer = owner,
+      realloc::zero = true,    
+    )]
+
+    pub journal_entry: Account<'info, JournalEntryState>,
+
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    pub system_program: Program<'info, System>
+
+}
+
+
+// define data structure for delete_journal_entry handler
+#[derive(Accounts)]
+#[instruction(title: String)]
+pub struct DeleteJournalEntry<'info> {
+    #[account(
+      mut,
+      seeds = [title.as_bytes(), owner.key().as_ref()],
+      bump,
+      close = owner,
+    )]
+
+    pub journal_entry: Account<'info, JournalEntryState>,
+
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    pub system_program: Program<'info, System>
 }
